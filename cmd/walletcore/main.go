@@ -4,29 +4,40 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/database"
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/event"
+	"github.com/AllanCordeiro/fc-ms-wallet/internal/event/handler"
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/usecase/account"
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/usecase/client"
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/usecase/transaction"
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/web"
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/web/webserver"
 	"github.com/AllanCordeiro/fc-ms-wallet/pkg/events"
+	"github.com/AllanCordeiro/fc-ms-wallet/pkg/kafka"
 	"github.com/AllanCordeiro/fc-ms-wallet/pkg/uow"
+	ckafka "github.com/confluentinc/confluent-kafka-go/kafka"
 	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local", "root", "root", "localhost", "3306", "wallet"))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local", "root", "root", "mysql", "3306", "wallet"))
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
 
-	transactionCreatedEvent := event.NewTransactionCreated()
+	configMap := ckafka.ConfigMap{
+		"bootstrap.servers": "kafka:29092",
+		"group.id":          "wallet",
+	}
+	kafkaProducer := kafka.NewKafkaProducer(&configMap)
+
 	eventDispatcher := events.NewEventDispatcher()
-	//eventDispatcher.Register("TransactionCreated", handler)
+	eventDispatcher.Register("TransactionCreated", handler.NewTransactionCreatedKafkaHandler(kafkaProducer))
+	transactionCreatedEvent := event.NewTransactionCreated()
+
 	clientDb := database.NewClientDB(db)
 	accountDb := database.NewAccountDB(db)
 
@@ -44,7 +55,7 @@ func main() {
 	createAccountUseCase := account.NewCreateAccountUseCase(accountDb, clientDb)
 	createTransactionUseCase := transaction.NewCreateTransactionUseCase(uow, eventDispatcher, transactionCreatedEvent)
 
-	webserver := webserver.NewWebServer(":3000")
+	webserver := webserver.NewWebServer(":8080")
 	clientHandler := web.NewWebClientHandler(*createClientUseCase)
 	accountHandler := web.NewWebAccountHandler(*createAccountUseCase)
 	transactionHandler := web.NewWebTransactionHandler(*createTransactionUseCase)
@@ -52,5 +63,6 @@ func main() {
 	webserver.AddHandler("/clients", clientHandler.CreateClient)
 	webserver.AddHandler("/accounts", accountHandler.CreateAccount)
 	webserver.AddHandler("/transactions", transactionHandler.CreateTransaction)
+	log.Println("server is running")
 	webserver.Start()
 }
