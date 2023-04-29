@@ -1,19 +1,6 @@
 version: '3'
 
 services:
-  goapp:
-    build: .
-    volumes:
-      - .:/app
-    ports:
-      - 8080:8080
-    depends_on:
-      - mysql
-    command: >
-      bash -c 
-        "sleep 5s &&
-        migrate -path=sql/migrations -database 'mysql://root:root@tcp(mysql:3306)/wallet' -verbose up"
-
   mysql:
       image: mysql:5.7
       platform: linux/amd64
@@ -86,3 +73,13 @@ services:
         kafka-topics --create --topic=accounts --if-not-exists --bootstrap-server=kafka:29092 &&
         kafka-topics --create --topic=transactions --if-not-exists --bootstrap-server=kafka:29092 &&
         kafka-topics --create --topic=balances --if-not-exists --bootstrap-server=kafka:29092"          
+
+  goapp:
+    build: .
+    volumes:
+      - .:/app
+    ports:
+      - 8080:8080
+    depends_on:
+      - mysql         
+    

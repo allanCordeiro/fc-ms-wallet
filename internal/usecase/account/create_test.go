@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/entity"
+	"github.com/AllanCordeiro/fc-ms-wallet/internal/event"
 	"github.com/AllanCordeiro/fc-ms-wallet/internal/usecase/mocks"
+	"github.com/AllanCordeiro/fc-ms-wallet/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -16,8 +18,10 @@ func TestCreateAccountUseCaseExecute(t *testing.T) {
 
 	accountMock := &mocks.AccountGatewayMock{}
 	accountMock.On("Save", mock.Anything).Return(nil)
+	dispatcher := events.NewEventDispatcher()
+	eventAccount := event.NewAccountCreated()
 
-	uc := NewCreateAccountUseCase(accountMock, clientMock)
+	uc := NewCreateAccountUseCase(accountMock, clientMock, dispatcher, eventAccount)
 	input := CreateAccountInputDTO{
 		ClientID: client.ID,
 	}

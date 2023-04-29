@@ -9,4 +9,7 @@ RUN apt-get install -y migrate
 COPY /sql/migrations /app/sql/migrations
 
 
-CMD ["tail", "-f", "/dev/null"]
+COPY /goapp.start.sh /app/goapp.start.sh
+
+
+CMD ["sh", "/app/goapp.start.sh"]
