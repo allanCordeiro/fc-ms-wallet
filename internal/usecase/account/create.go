@@ -41,6 +41,8 @@ func (uc *CreateAccountUseCase) Execute(input CreateAccountInputDTO) (*CreateAcc
 	}
 
 	account := entity.NewAccount(client)
+	//each account will receive 100.00 moneys to make easy to rollup the chapter challenge
+	account.Balance = 100.00
 	err = uc.AccountGateway.Save(account)
 	if err != nil {
 		return nil, err
@@ -49,7 +51,7 @@ func (uc *CreateAccountUseCase) Execute(input CreateAccountInputDTO) (*CreateAcc
 	var output CreateAccountOutputDTO
 	output.ID = account.ID
 
-	uc.AccountCreated.SetPayload(output)
+	uc.AccountCreated.SetPayload(account.ID)
 	uc.EventDispatcher.Dispatch(uc.AccountCreated)
 
 	return &output, nil
