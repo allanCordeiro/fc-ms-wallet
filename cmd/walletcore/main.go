@@ -19,14 +19,33 @@ import (
 	"github.com/AllanCordeiro/fc-ms-wallet/pkg/uow"
 	ckafka "github.com/confluentinc/confluent-kafka-go/kafka"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func main() {
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8&parseTime=True&loc=Local", "root", "root", "mysql", "3306", "wallet"))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?multiStatements=true&charset=utf8&parseTime=True&loc=Local", "root", "root", "mysql", "3306", "wallet"))
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
+
+	driver, err := mysql.WithInstance(db, &mysql.Config{})
+	if err != nil {
+		panic(err)
+	}
+
+	m, err := migrate.NewWithDatabaseInstance(
+		"file://sql/migrations",
+		"mysql",
+		driver,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	m.Up()
 
 	configMap := ckafka.ConfigMap{
 		"bootstrap.servers": "kafka:29092",
@@ -37,8 +56,11 @@ func main() {
 	eventDispatcher := events.NewEventDispatcher()
 	eventDispatcher.Register("TransactionCreated", handler.NewTransactionCreatedKafkaHandler(kafkaProducer))
 	eventDispatcher.Register("BalanceUpdated", handler.NewUpdateBalanceKafkaHandler(kafkaProducer))
+	eventDispatcher.Register("AccountCreated", handler.NewCreateAccountKafkaHandler(kafkaProducer))
+
 	transactionCreatedEvent := event.NewTransactionCreated()
 	balanceUpdatedEvent := event.NewBalanceUpdated()
+	accountCreatedEvent := event.NewAccountCreated()
 
 	clientDb := database.NewClientDB(db)
 	accountDb := database.NewAccountDB(db)
@@ -54,7 +76,7 @@ func main() {
 	})
 
 	createClientUseCase := client.NewCreateClientUseCase(clientDb)
-	createAccountUseCase := account.NewCreateAccountUseCase(accountDb, clientDb)
+	createAccountUseCase := account.NewCreateAccountUseCase(accountDb, clientDb, eventDispatcher, accountCreatedEvent)
 	createTransactionUseCase := transaction.NewCreateTransactionUseCase(uow, eventDispatcher, transactionCreatedEvent, balanceUpdatedEvent)
 
 	webserver := webserver.NewWebServer(":8080")

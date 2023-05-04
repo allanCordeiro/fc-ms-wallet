@@ -2,11 +2,14 @@ version: '3'
 
 services:
   goapp:
-    build: .
-    volumes:
-      - .:/app
-    ports:
-      - 8080:8080
+      build: .
+      volumes:
+        - .:/app
+      ports:
+        - 8080:8080
+      depends_on:
+        - mysql         
+
   mysql:
       image: mysql:5.7
       platform: linux/amd64
@@ -18,6 +21,7 @@ services:
         - 3306:3306
       volumes:
         - .docker/mysql:/var/lib/mysql
+
   zookeeper:
     image: "confluentinc/cp-zookeeper:6.1.0"
     container_name: zookeeper
@@ -50,7 +54,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 100
-      CONFLUENT_METRICS_ENABLE: 'false'
+      CONFLUENT_METRICS_ENABLE: 'false' 
 
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.3.0
@@ -67,3 +71,14 @@ services:
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
       CONFLUENT_METRICS_TOPIC_REPLICATION: 1
       PORT: 9021
+
+  kafka-topics-generator:
+    image: "confluentinc/cp-enterprise-kafka:6.1.0"
+    depends_on:
+      - kafka
+    command: >
+      bash -c 
+        "sleep 10s &&
+        kafka-topics --create --topic=accounts --if-not-exists --bootstrap-server=kafka:29092 &&
+        kafka-topics --create --topic=transactions --if-not-exists --bootstrap-server=kafka:29092 &&
+        kafka-topics --create --topic=balances --if-not-exists --bootstrap-server=kafka:29092"          
